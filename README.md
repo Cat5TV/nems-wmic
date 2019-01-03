@@ -1,49 +1,10 @@
-![Greenbone Logo](https://www.greenbone.net/wp-content/uploads/gb_logo_resilience_horizontal.png)
-
 # openvas-smb
 
-[![GitHub releases](https://img.shields.io/github/release/greenbone/openvas-smb.svg)](https://github.com/greenbone/openvas-smb/releases)
-[![CircleCI](https://circleci.com/gh/greenbone/openvas-smb/tree/master.svg?style=svg)](https://circleci.com/gh/greenbone/openvas-smb/tree/master)
-
-This is the `smb` module for the OpenVAS Scanner. It includes libraries
-(`openvas-wmiclient`/`openvas-wincmd`) to interface with Microsoft Windows
-Systems through the Windows Management Instrumentation API and a `winexe`
-binary to execute processes remotely on that system.
+WMIC used to be available via http://www.openvas.org/download/wmi/wmi-1.3.14.tar.bz2 however that has been discontinued. Development proceeded courtesy of [Greenbone Networks GmbH](https://www.greenbone.net/) (OpenVAS) and this has been integrated into NEMS Linux 1.5 in place of the old WMI 1.3.14.
 
 ## Installation
 
-This module can be configured, built and installed with following commands:
-
-    cmake .
-    make install
-
-For detailed installation requirements and instructions, please see the file
-[INSTALL.md](INSTALL.md).
-
-If you are not familiar or comfortable building from source code, we recommend
-that you use the Greenbone Community Edition, a prepared virtual machine with a
-readily available setup. Information regarding the virtual machine is available
-at <https://www.greenbone.net/en/community-edition/>.
-
-## Support
-
-For any question on the usage of `openvas-smb` please use the [Greenbone
-Community Portal](https://community.greenbone.net/c/gse). If you found a
-problem with the software, please [create an
-issue](https://github.com/greenbone/openvas-smb/issues) on GitHub. If you are a
-Greenbone customer you may alternatively or additionally forward your issue to
-the Greenbone Support Portal.
-
-## Maintainer
-
-This project is maintained by [Greenbone Networks GmbH](https://www.greenbone.net/).
-
-## Contributing
-
-Your contributions are highly appreciated. Please [create a pull
-request](https://github.com/greenbone/openvas-smb/pulls) on GitHub. Bigger
-changes need to be discussed with the development team via the [issues section
-at github](https://github.com/greenbone/openvas-smb/issues) first.
+See [055-wmic](https://github.com/Cat5TV/nems-admin/blob/master/build/055-wmic) in nems-admin.
 
 ## License
 
