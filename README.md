@@ -1,4 +1,5 @@
-# openvas-smb
+# nems-wmic
+## Based on openvas-smb
 
 WMIC used to be available via http://www.openvas.org/download/wmi/wmi-1.3.14.tar.bz2 however that has been discontinued. Development proceeded courtesy of [Greenbone Networks GmbH](https://www.greenbone.net/) (OpenVAS) and this has been integrated into NEMS Linux 1.5 in place of the old WMI 1.3.14.
 
