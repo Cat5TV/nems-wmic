@@ -6,7 +6,7 @@ WMIC used to be available via http://www.openvas.org/download/wmi/wmi-1.3.14.tar
 
 ## Installation
 
-See [055-wmic](https://github.com/Cat5TV/nems-admin/blob/master/build/055-wmic) in nems-admin.
+See [053-wmic](https://github.com/Cat5TV/nems-admin/blob/master/build/053-wmic) in nems-admin.
 
 ## License
 
