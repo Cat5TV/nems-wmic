@@ -1,0 +1,335 @@
+Index: lib/gssapi/ntlm/crypto.c
+===================================================================
+--- lib/gssapi/ntlm/crypto.c	(revision 796)
++++ lib/gssapi/ntlm/crypto.c	(working copy)
+@@ -1,6 +1,7 @@
+ /*
+  * Copyright (c) 2006 Kungliga Tekniska Högskolan
+  * (Royal Institute of Technology, Stockholm, Sweden).
++ * Copyright (c) 2008 Red Hat Inc.
+  * All rights reserved.
+  *
+  * Redistribution and use in source and binary forms, with or without
+@@ -194,10 +195,12 @@
+ v2_seal_message(const gss_buffer_t in,
+		unsigned char signkey[16],
+		uint32_t seq,
++		RC4_KEY *signsealkey,
+		RC4_KEY *sealkey,
+		gss_buffer_t out)
+ {
+     unsigned char *p;
++    unsigned char sealed_sig[16];
+     OM_uint32 ret;
+
+     if (in->length + 16 < in->length)
+@@ -207,14 +210,21 @@
+     if (p == NULL)
+	return ENOMEM;
+
+-    RC4(sealkey, in->length, in->value, p);
+-
+-    ret = v2_sign_message(in, signkey, sealkey, seq, &p[in->length]);
++    /* Must encrypt signature after encrypting the data, so don't specify signseal key here */
++    ret = v2_sign_message(in, signkey, NULL, seq, &p[in->length]);
+     if (ret) {
+	free(p);
+	return ret;
+     }
+
++    RC4(sealkey, in->length, in->value, p);
++
++    /* Instead deal with it here */
++    if (signsealkey) {
++	    RC4(sealkey, 16, &p[in->length], sealed_sig);
++	    memcpy(&p[in->length], sealed_sig, 16);
++    }
++
+     out->value = p;
+     out->length = in->length + 16;
+
+@@ -225,6 +235,7 @@
+ v2_unseal_message(gss_buffer_t in,
+		  unsigned char signkey[16],
+		  uint32_t seq,
++		  RC4_KEY *signsealkey,
+		  RC4_KEY *sealkey,
+		  gss_buffer_t out)
+ {
+@@ -240,7 +251,7 @@
+
+     RC4(sealkey, out->length, in->value, out->value);
+
+-    ret = v2_verify_message(out, signkey, sealkey, seq,
++    ret = v2_verify_message(out, signkey, signsealkey, seq,
+			    ((const unsigned char *)in->value) + out->length);
+     if (ret) {
+	OM_uint32 junk;
+@@ -249,6 +260,103 @@
+     return ret;
+ }
+
++static OM_uint32
++v2_seal_message_ex(const gss_buffer_t in_to_sign,
++		   const gss_buffer_t in_to_seal,
++		   unsigned char signkey[16],
++		   uint32_t seq,
++		   RC4_KEY *signsealkey,
++		   RC4_KEY *sealkey,
++		   gss_buffer_t out_signature,
++		   gss_buffer_t out_sealed)
++{
++    unsigned char *p;
++    unsigned char sealed_sig[16];
++    OM_uint32 ret;
++
++    out_sealed->value = malloc(in_to_seal->length);
++    if (out_sealed->value == NULL)
++	return ENOMEM;
++
++    out_signature->value = malloc(16);
++    if (out_signature->value == NULL) {
++	free(out_sealed->value);
++	return ENOMEM;
++    }
++
++    /* Must encrypt signature after encrypting the data, so don't specify signseal key here */
++    ret = v2_sign_message(in_to_sign, signkey, NULL, seq, out_signature->value);
++    if (ret) {
++	free(p);
++	return ret;
++    }
++
++    out_signature->length = 16;
++
++    RC4(sealkey, in_to_seal->length, in_to_seal->value, out_sealed->value);
++
++    out_sealed->length = in_to_sign->length;
++
++    /* Instead deal with it here */
++    if (signsealkey) {
++	    RC4(sealkey, 16, out_signature->value, sealed_sig);
++	    memcpy(out_signature->value, sealed_sig, 16);
++    }
++
++    return 0;
++}
++
++static OM_uint32
++v2_unseal_message_ex(gss_buffer_t in_signed,
++		     gss_buffer_t in_sealed,
++		     gss_buffer_t in_signature,
++		     unsigned char signkey[16],
++		     uint32_t seq,
++		     RC4_KEY *signsealkey,
++		     RC4_KEY *sealkey,
++		     gss_buffer_t out_unsealed)
++{
++    OM_uint32 ret;
++    gss_buffer_desc unsealed_with_aead;
++
++    if (in_sealed->value < in_signed->value) {
++	return GSS_S_BAD_MIC;
++    }
++
++    if (&((char *)in_sealed->value)[in_sealed->length] > &((char *)in_signed->value)[in_signed->length]) {
++	return GSS_S_BAD_MIC;
++    }
++
++    if (in_signature->length < 16)
++	return GSS_S_BAD_MIC;
++
++    unsealed_with_aead.value = malloc(in_signed->length);
++    if (unsealed_with_aead.value == NULL)
++	return ENOMEM;
++
++    out_unsealed->length = in_sealed->length;
++    out_unsealed->value = malloc(out_unsealed->length);
++    if (out_unsealed->value == NULL) {
++	free(unsealed_with_aead.value);
++	return GSS_S_BAD_MIC;
++    }
++
++    RC4(sealkey, out_unsealed->length, in_sealed->value, out_unsealed->value);
++
++    memcpy(unsealed_with_aead.value, in_signed->value, in_signed->length);
++
++    /* Someone please check this is doing the right thing... */
++    memcpy(&((char *)unsealed_with_aead.value)[(char *)in_sealed->value - (char *)in_signed->value],
++	   out_unsealed->value, out_unsealed->length);
++
++    ret = v2_verify_message(&unsealed_with_aead, signkey, sealkey, seq, in_signature->value);
++    if (ret) {
++	OM_uint32 junk;
++	gss_release_buffer(&junk, out_unsealed);
++    }
++    return ret;
++}
++
+ /*
+  *
+  */
+@@ -482,6 +590,7 @@
+	return v2_seal_message(input_message_buffer,
+			       ctx->u.v2.send.signkey,
+			       ctx->u.v2.send.seq++,
++			       ctx->u.v2.send.signsealkey,
+			       &ctx->u.v2.send.sealkey,
+			       output_message_buffer);
+
+@@ -555,6 +664,7 @@
+	return v2_unseal_message(input_message_buffer,
+				 ctx->u.v2.recv.signkey,
+				 ctx->u.v2.recv.seq++,
++				 ctx->u.v2.send.signsealkey,
+				 &ctx->u.v2.recv.sealkey,
+				 output_message_buffer);
+
+@@ -593,3 +703,134 @@
+
+     return GSS_S_UNAVAILABLE;
+ }
++/*
++ *
++ */
++
++OM_uint32 _gss_ntlm_wrap_ex
++(OM_uint32 * minor_status,
++ const gss_ctx_id_t context_handle,
++ int conf_req_flag,
++ gss_qop_t qop_req,
++ const gss_buffer_t associated_data_buffer,
++ const gss_buffer_t input_message_buffer,
++ int * conf_state,
++ gss_buffer_t output_token_buffer,
++ gss_buffer_t output_message_buffer
++    )
++{
++    ntlm_ctx ctx = (ntlm_ctx)context_handle;
++    OM_uint32 ret;
++
++    if (minor_status)
++	*minor_status = 0;
++    if (conf_state)
++	*conf_state = 0;
++    if (output_message_buffer == GSS_C_NO_BUFFER)
++	return GSS_S_FAILURE;
++
++
++    if (CTX_FLAGS_ISSET(ctx, NTLM_NEG_SEAL|NTLM_NEG_NTLM2_SESSION)) {
++
++	    return v2_seal_message_ex(associated_data_buffer,
++				      input_message_buffer,
++				      ctx->u.v2.send.signkey,
++				      ctx->u.v2.send.seq++,
++				      ctx->u.v2.send.signsealkey,
++				      &ctx->u.v2.send.sealkey,
++				      output_token_buffer,
++				      output_message_buffer);
++
++    } else if (CTX_FLAGS_ISSET(ctx, NTLM_NEG_SEAL)) {
++	OM_uint32 junk;
++
++	output_message_buffer->length = input_message_buffer->length;
++	output_message_buffer->value = malloc(output_message_buffer->length);
++	if (output_message_buffer->value == NULL) {
++	    output_message_buffer->length = 0;
++	    return GSS_S_FAILURE;
++	}
++
++
++	RC4(&ctx->u.v1.crypto_send.key, input_message_buffer->length,
++	    input_message_buffer->value, output_message_buffer->value);
++
++	ret = _gss_ntlm_get_mic(minor_status, context_handle,
++				0, input_message_buffer,
++				output_token_buffer);
++	if (ret) {
++	    gss_release_buffer(&junk, output_message_buffer);
++	    return ret;
++	}
++	return GSS_S_COMPLETE;
++    }
++
++    return GSS_S_UNAVAILABLE;
++}
++
++/*
++ *
++ */
++
++OM_uint32 _gss_ntlm_unwrap_ex
++(OM_uint32 * minor_status,
++ const gss_ctx_id_t context_handle,
++ const gss_buffer_t token_header_buffer,
++ const gss_buffer_t associated_data_buffer,
++ const gss_buffer_t input_message_buffer,
++ gss_buffer_t output_message_buffer,
++ int * conf_state,
++ gss_qop_t * qop_state
++	)
++{
++    ntlm_ctx ctx = (ntlm_ctx)context_handle;
++    OM_uint32 ret;
++
++    if (minor_status)
++	*minor_status = 0;
++    if (output_message_buffer) {
++	output_message_buffer->value = NULL;
++	output_message_buffer->length = 0;
++    }
++    if (conf_state)
++	*conf_state = 0;
++    if (qop_state)
++	*qop_state = 0;
++
++    if (CTX_FLAGS_ISSET(ctx, NTLM_NEG_SEAL|NTLM_NEG_NTLM2_SESSION)) {
++
++	    return v2_unseal_message_ex(associated_data_buffer,
++					input_message_buffer,
++					token_header_buffer,
++					ctx->u.v2.recv.signkey,
++					ctx->u.v2.recv.seq++,
++					ctx->u.v2.recv.signsealkey,
++					&ctx->u.v2.recv.sealkey,
++					output_message_buffer);
++
++    } else if (CTX_FLAGS_ISSET(ctx, NTLM_NEG_SEAL)) {
++	OM_uint32 junk;
++
++	output_message_buffer->length = input_message_buffer->length;
++	output_message_buffer->value = malloc(output_message_buffer->length);
++	if (output_message_buffer->value == NULL) {
++	    output_message_buffer->length = 0;
++	    return GSS_S_FAILURE;
++	}
++
++	RC4(&ctx->u.v1.crypto_recv.key, output_message_buffer->length,
++	    input_message_buffer->value, output_message_buffer->value);
++
++	ret = _gss_ntlm_verify_mic(minor_status, context_handle,
++				   output_message_buffer,
++				   token_header_buffer, NULL);
++	if (ret) {
++	    gss_release_buffer(&junk, output_message_buffer);
++	    return ret;
++	}
++
++	return GSS_S_COMPLETE;
++    }
++
++    return GSS_S_UNAVAILABLE;
++}
+Index: lib/gssapi/ntlm/external.c
+===================================================================
+--- lib/gssapi/ntlm/external.c	(revision 796)
++++ lib/gssapi/ntlm/external.c	(working copy)
+@@ -50,6 +50,8 @@
+     _gss_ntlm_verify_mic,
+     _gss_ntlm_wrap,
+     _gss_ntlm_unwrap,
++    _gss_ntlm_wrap_ex,
++    _gss_ntlm_unwrap_ex,
+     _gss_ntlm_display_status,
+     NULL,
+     _gss_ntlm_compare_name,
