@@ -3,7 +3,7 @@
 
 In NEMS Linux 1.5+, nems-wmic was based on openvas-smb, which was based on Zenoss WMI 1.3.14, which is based on samba.
 
-By NEMS Linux 1.6, OpenVAS' version has fallen behind the changes in WMI on Windows 10 2004+, so I've moved back to Zenoss' source with their WMI 1.4.0, which fixes these issues ahead of OpenVAS.
+By NEMS Linux 1.6, OpenVAS' version has fallen behind the changes in WMI on Windows 10 2004+, so I've moved back to Zenoss' source with their WMI 1.4.1, which fixes these issues ahead of OpenVAS.
 
 :P  Ah, gotta love open source!
 
