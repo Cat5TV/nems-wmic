@@ -37,7 +37,7 @@ SAMBA_VERSION_RELEASE=1
 # e.g. SAMBA_VERSION_REVISION=a                        #
 #  ->  "2.2.8a"                                        #
 ########################################################
-SAMBA_VERSION_REVISION=
+SAMBA_VERSION_REVISION=a
 
 ########################################################
 # For 'tp' releases the version will be                #
@@ -103,5 +103,5 @@ SAMBA_VERSION_RELEASE_NICKNAME=
 #  ->  "3.0.0rc2-VendorVersion"                        #
 #                                                      #
 ########################################################
-SAMBA_VERSION_VENDOR_SUFFIX=
-SAMBA_VERSION_VENDOR_PATCH=
+SAMBA_VERSION_VENDOR_SUFFIX=NEMSLinux
+SAMBA_VERSION_VENDOR_PATCH=1.6

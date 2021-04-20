@@ -4,8 +4,8 @@ modulesdir=${prefix}/modules/registry
 
 Name: registry
 Description: Windows-style registry library
-Requires.private: rpc_ndr_winreg ldb talloc 
+Requires.private: ldb talloc rpc_ndr_winreg 
 Version: 0.0.1
 Libs: -Lbin/shared -Lbin/static -lregistry
-Libs.private: -lsamba-util -lcharset -lreplace -lreplace -ltdr_regf -lreplace -lreplace -lreplace -lreplace 
+Libs.private: -lsamba-util -lcharset -lreplace -ltdr_regf -lreplace -lreplace -lreplace -lreplace -lreplace 
 Cflags: -I${includedir} -I. -Iinclude -Ilib -Ilib/replace -DHAVE_IMMEDIATE_STRUCTURES=1
